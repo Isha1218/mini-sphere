@@ -1,0 +1,16 @@
+[project]
+name = "desk-sphere"
+version = "0.1.0"
+description = "Daemon and CLI for the desk sphere"
+requires-python = ">=3.10"
+dependencies = [
+    "websockets>=13",
+    "pyobjc-framework-Quartz; sys_platform == 'darwin'",
+]
+
+[project.scripts]
+sphere = "sphere.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "daemon" }
+packages = ["sphere"]
