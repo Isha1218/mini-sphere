@@ -1,4 +1,4 @@
-// Look 1: minimalist glowing white face (pill eyes, small smile) on a black glass ball.
+// Look 1: minimalist glowing white eyes (no mouth) on a black glass ball.
 // Expressions morph into each other instead of snapping.
 #include "eye.h"
 #include <math.h>
@@ -108,28 +108,25 @@ static float eyes(float x, float y, float hh) {
 }
 
 static float features(eye_state_t state, float x, float y) {
-    float open = 0.07f * (1 - e.blink);  // eye half-height above the rounded caps
+    float open = 0.12f * (1 - e.blink);  // eye half-height above the rounded caps
     switch (state) {
-    case EYE_THINKING:  // one eye squints, mouth slides to the side
-        return minf(minf(pill(x, y, -0.26f, -0.12f, 0.035f, open, 0.06f),
-                         pill(x, y, 0.26f, -0.1f, 0.035f, open * 0.2f, 0.05f)),
-                    segment(x, y, 0.04f, 0.27f, 0.2f, 0.25f, 0.03f));
-    case EYE_WAITING:   // big round eyes, small "o"
-        return minf(eyes(x, y, open * 0.6f + 0.02f), fabsf(len(x, y - 0.28f) - 0.05f) - 0.025f);
-    case EYE_DONE:      // ^ ^ eyes, wide smile
-        return minf(minf(arc(x, y, -0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0), arc(x, y, 0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0)),
-                    arc(x, y, 0, 0.0f, 0.3f, 0.035f, 0.14f, 1));
-    case EYE_ERROR: {   // x x eyes, frown
+    case EYE_THINKING:  // one eye squints
+        return minf(pill(x, y, -0.26f, -0.12f, 0.035f, open, 0.06f), pill(x, y, 0.26f, -0.1f, 0.035f, open * 0.12f, 0.05f));
+    case EYE_WAITING:   // eyes open extra wide
+        return eyes(x, y, open * 1.2f);
+    case EYE_DONE:      // ^ ^
+        return minf(arc(x, y, -0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0), arc(x, y, 0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0));
+    case EYE_ERROR: {   // x x
         float d = 1;
         for (int s = -1; s <= 1; s += 2) {
             float cx = 0.26f * s;
             d = minf(d, segment(x, y, cx - 0.08f, -0.2f, cx + 0.08f, -0.04f, 0.03f));
             d = minf(d, segment(x, y, cx - 0.08f, -0.04f, cx + 0.08f, -0.2f, 0.03f));
         }
-        return minf(d, arc(x, y, 0, 0.45f, 0.2f, 0.03f, 0.33f, 0));
+        return d;
     }
-    default:            // idle: pill eyes, small smile
-        return minf(eyes(x, y, open), arc(x, y, 0, 0.04f, 0.2f, 0.03f, 0.16f, 1));
+    default:            // idle: tall pill eyes
+        return eyes(x, y, open);
     }
 }
 
