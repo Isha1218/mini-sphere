@@ -1,43 +1,38 @@
+// Look 1: minimalist glowing white face (pill eyes, small smile) on a black glass ball.
+// Expressions morph into each other instead of snapping.
 #include "eye.h"
 #include <math.h>
 #include <string.h>
 
 typedef struct { float r, g, b; } rgb_t;
 
-static const rgb_t IRIS_COLOR[EYE_STATE_COUNT] = {
-    [EYE_IDLE]     = {0.20f, 0.55f, 0.95f},
-    [EYE_THINKING] = {0.62f, 0.38f, 0.98f},
-    [EYE_WAITING]  = {1.00f, 0.62f, 0.10f},
-    [EYE_DONE]     = {0.20f, 0.92f, 0.42f},
-    [EYE_ERROR]    = {0.98f, 0.22f, 0.20f},
-};
-
-#define IRIS_ANGLE 0.42f        // iris radius, as an angle on the eyeball
-#define DONE_SECONDS 4.0f       // "done" celebrates, then returns to idle
+#define DONE_SECONDS 4.0f   // "done" celebrates, then returns to idle
+#define MORPH_SECONDS 0.3f  // expression change duration
+#define AA 0.012f           // edge softness, about one pixel in face units
 
 static struct {
-    eye_state_t state;
+    eye_state_t state, prev;
     uint32_t state_since, now, last, next_blink, blink_start, rng;
-    float look_x, look_y;       // target from the cursor
-    float gaze_x, gaze_y;       // smoothed gaze
-    float pupil;                // pupil size, fraction of iris
-    float squint;               // 0..1 happy-eyes lower lid
-    float glow;                 // status ring strength
-    float phase;                // iris swirl
-    float blink;                // 0 open .. 1 closed
-    rgb_t iris;
+    float look_x, look_y;   // target from the cursor
+    float gaze_x, gaze_y;   // smoothed: where the face points
+    float blink;            // 0 open .. 1 closed
+    float bright;           // overall brightness
+    float morph;            // 0 = showing prev expression .. 1 = fully current
 } e;
 
 static float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
 static float smoothstep(float a, float b, float x) { x = clampf((x - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); }
 static float approach(float cur, float target, float k) { return cur + (target - cur) * k; }
 static uint32_t rnd(void) { e.rng = e.rng * 1664525u + 1013904223u; return e.rng >> 8; }
+static float minf(float a, float b) { return a < b ? a : b; }
+static float maxf(float a, float b) { return a > b ? a : b; }
+static float len(float x, float y) { return sqrtf(x * x + y * y); }
 
 void eye_init(uint32_t seed) {
     memset(&e, 0, sizeof e);
     e.rng = seed | 1;
-    e.pupil = 0.45f;
-    e.iris = IRIS_COLOR[EYE_IDLE];
+    e.bright = 1;
+    e.morph = 1;
 }
 
 void eye_look(float x, float y) {
@@ -46,7 +41,8 @@ void eye_look(float x, float y) {
 }
 
 void eye_set_state(eye_state_t s) {
-    if (s >= EYE_STATE_COUNT) return;
+    if (s >= EYE_STATE_COUNT || s == e.state) return;
+    e.prev = e.state;
     e.state = s;
     e.state_since = e.now;
 }
@@ -58,117 +54,126 @@ void eye_update(uint32_t now) {
     float age = (now - e.state_since) / 1000.0f;
     if (e.state == EYE_DONE && age > DONE_SECONDS) eye_set_state(EYE_IDLE);
 
-    float tx = e.look_x, ty = e.look_y, pupil = 0.45f, squint = 0, glow = 0.12f, swirl = 0.1f;
+    float tx = e.look_x, ty = e.look_y, bright = 1;
     switch (e.state) {
-    case EYE_THINKING:  // glance up and away, iris swirls
-        tx = 0.6f + 0.15f * sinf(t * 0.7f);
-        ty = -0.6f + 0.1f * sinf(t * 1.1f);
-        pupil = 0.4f; swirl = 1.5f;
-        glow = 0.3f + 0.15f * sinf(t * 2);
+    case EYE_THINKING:  // look up and away, drifting
+        tx = 0.55f + 0.15f * sinf(t * 0.7f);
+        ty = -0.55f + 0.1f * sinf(t * 1.1f);
         break;
-    case EYE_WAITING:   // stare at you, pupils and ring pulse
+    case EYE_WAITING:   // turn to face you, pulse to get attention
         tx = ty = 0;
-        pupil = 0.55f + 0.1f * sinf(t * 4);
-        glow = 0.4f + 0.3f * sinf(t * 4);
+        bright = 0.7f + 0.3f * sinf(t * 4);
         break;
-    case EYE_DONE:      // happy squint, bright ring that fades
-        pupil = 0.6f; squint = 1;
-        glow = 0.8f * (1 - age / DONE_SECONDS);
-        break;
-    case EYE_ERROR:     // shake, tiny pupils
-        tx = 0.3f * sinf(t * 30) * expf(-age * 2); ty = 0;
-        pupil = 0.28f; glow = 0.5f;
+    case EYE_ERROR:     // shake
+        tx = 0.35f * sinf(t * 30) * expf(-age * 2); ty = 0;
         break;
     default: break;
     }
 
-    float fast = 1 - expf(-dt * 12), slow = 1 - expf(-dt * 5);
+    float fast = 1 - expf(-dt * 10);
     e.gaze_x = approach(e.gaze_x, tx, fast);
     e.gaze_y = approach(e.gaze_y, ty, fast);
-    e.pupil = approach(e.pupil, pupil, slow);
-    e.squint = approach(e.squint, squint, slow);
-    e.glow = approach(e.glow, glow, slow);
-    e.iris.r = approach(e.iris.r, IRIS_COLOR[e.state].r, slow);
-    e.iris.g = approach(e.iris.g, IRIS_COLOR[e.state].g, slow);
-    e.iris.b = approach(e.iris.b, IRIS_COLOR[e.state].b, slow);
-    e.phase += dt * swirl;
+    e.bright = approach(e.bright, bright, fast);
+    e.morph = smoothstep(0, MORPH_SECONDS, age);
 
     if (now >= e.next_blink) {
         e.blink_start = now;
         e.next_blink = now + 2500 + rnd() % 4000;
     }
-    float bt = (now - e.blink_start) / 1000.0f;  // 0.15s closing, 0.15s opening
-    e.blink = bt < 0.3f ? 1 - fabsf(bt - 0.15f) / 0.15f : 0;
+    float bt = (now - e.blink_start) / 1000.0f;  // 0.12s closing, 0.12s opening
+    e.blink = bt < 0.24f ? 1 - fabsf(bt - 0.12f) / 0.12f : 0;
 }
 
-static uint16_t rgb565(rgb_t c) {
-    return (uint16_t)((int)(clampf(c.r, 0, 1) * 31 + 0.5f) << 11 |
-                      (int)(clampf(c.g, 0, 1) * 63 + 0.5f) << 5 |
-                      (int)(clampf(c.b, 0, 1) * 31 + 0.5f));
+// --- Feature shapes, as signed distances in face coordinates (x right, y down, face radius 1) ---
+
+static float pill(float x, float y, float cx, float cy, float hw, float hh, float r) {
+    float qx = fabsf(x - cx) - hw, qy = fabsf(y - cy) - hh;
+    return len(maxf(qx, 0), maxf(qy, 0)) + minf(maxf(qx, qy), 0) - r;
 }
 
-static rgb_t mix(rgb_t a, rgb_t b, float k) {
-    return (rgb_t){a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k};
+static float segment(float x, float y, float ax, float ay, float bx, float by, float w) {
+    float px = x - ax, py = y - ay, dx = bx - ax, dy = by - ay;
+    float h = clampf((px * dx + py * dy) / (dx * dx + dy * dy), 0, 1);
+    return len(px - dx * h, py - dy * h) - w;
 }
 
-static rgb_t scale(rgb_t c, float k) { return (rgb_t){c.r * k, c.g * k, c.b * k}; }
+// Stroke along a circle, kept on one side of the line y = cut (below if below > 0).
+static float arc(float x, float y, float cx, float cy, float r, float w, float cut, int below) {
+    float d = fabsf(len(x - cx, y - cy) - r) - w;
+    return maxf(d, below ? cut - y : y - cut);
+}
+
+static float eyes(float x, float y, float hh) {
+    return minf(pill(x, y, -0.26f, -0.12f, 0.035f, hh, 0.06f), pill(x, y, 0.26f, -0.12f, 0.035f, hh, 0.06f));
+}
+
+static float features(eye_state_t state, float x, float y) {
+    float open = 0.07f * (1 - e.blink);  // eye half-height above the rounded caps
+    switch (state) {
+    case EYE_THINKING:  // one eye squints, mouth slides to the side
+        return minf(minf(pill(x, y, -0.26f, -0.12f, 0.035f, open, 0.06f),
+                         pill(x, y, 0.26f, -0.1f, 0.035f, open * 0.2f, 0.05f)),
+                    segment(x, y, 0.04f, 0.27f, 0.2f, 0.25f, 0.03f));
+    case EYE_WAITING:   // big round eyes, small "o"
+        return minf(eyes(x, y, open * 0.6f + 0.02f), fabsf(len(x, y - 0.28f) - 0.05f) - 0.025f);
+    case EYE_DONE:      // ^ ^ eyes, wide smile
+        return minf(minf(arc(x, y, -0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0), arc(x, y, 0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0)),
+                    arc(x, y, 0, 0.0f, 0.3f, 0.035f, 0.14f, 1));
+    case EYE_ERROR: {   // x x eyes, frown
+        float d = 1;
+        for (int s = -1; s <= 1; s += 2) {
+            float cx = 0.26f * s;
+            d = minf(d, segment(x, y, cx - 0.08f, -0.2f, cx + 0.08f, -0.04f, 0.03f));
+            d = minf(d, segment(x, y, cx - 0.08f, -0.04f, cx + 0.08f, -0.2f, 0.03f));
+        }
+        return minf(d, arc(x, y, 0, 0.45f, 0.2f, 0.03f, 0.33f, 0));
+    }
+    default:            // idle: pill eyes, small smile
+        return minf(eyes(x, y, open), arc(x, y, 0, 0.04f, 0.2f, 0.03f, 0.16f, 1));
+    }
+}
+
+// Color of the ball at a screen point (u, v inside the unit circle).
+static rgb_t ball(float u, float v, float sy, float cy, float sp, float cp) {
+    float r2 = u * u + v * v, z = sqrtf(1 - r2);
+    // Rotate the screen point into face coordinates (undo yaw, then pitch).
+    float x1 = u * cy - z * sy, z1 = u * sy + z * cy;
+    float y2 = v * cp - z1 * sp, z2 = v * sp + z1 * cp;
+
+    // Black glass: faint top-left sheen and a thin rim of light so the sphere reads.
+    float sheen = 0.06f * expf(-((u + 0.35f) * (u + 0.35f) + (v + 0.45f) * (v + 0.45f)) * 6);
+    float rim = 0.08f * smoothstep(0.9f, 1.0f, sqrtf(r2)) * (0.5f - 0.5f * v);
+    float bg = 0.015f + sheen + rim;
+    rgb_t col = {bg, bg, bg * 1.1f};
+
+    if (z2 > 0) {
+        float d = features(e.state, x1, y2);
+        if (e.morph < 1) d = features(e.prev, x1, y2) + (d - features(e.prev, x1, y2)) * e.morph;
+        float lit = smoothstep(AA, -AA, d) + 0.18f * expf(-maxf(d, 0) * 18);  // crisp core + soft bloom
+        lit *= (0.5f + 0.5f * z2) * e.bright;  // dimmer as features turn away
+        const rgb_t white = {0.96f, 0.97f, 1.0f};
+        col.r += white.r * lit; col.g += white.g * lit; col.b += white.b * lit;
+    }
+    return col;
+}
+
+// RGB565 has visible steps in dark shades; a 4x4 ordered dither hides the banding.
+static uint16_t rgb565(rgb_t c, int x, int y) {
+    static const uint8_t BAYER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    float t = BAYER[y & 3][x & 3] / 16.0f;
+    return (uint16_t)((int)(clampf(c.r, 0, 1) * 31 + t) << 11 |
+                      (int)(clampf(c.g, 0, 1) * 63 + t) << 5 |
+                      (int)(clampf(c.b, 0, 1) * 31 + t));
+}
 
 void eye_render(uint16_t *fb) {
-    // Gaze direction on the eyeball (screen axes: x right, y down, z toward viewer).
-    float yaw = e.gaze_x * 0.55f, pitch = e.gaze_y * 0.45f;
-    float gx = sinf(yaw) * cosf(pitch), gy = sinf(pitch), gz = cosf(yaw) * cosf(pitch);
-    // Tangent basis around the gaze, for the iris fiber pattern.
-    float n = sqrtf(gx * gx + gz * gz);
-    float e1x = gz / n, e1z = -gx / n;
-    float e2x = gy * e1z, e2y = gz * e1x - gx * e1z, e2z = -gy * e1x;
-
-    const float iris_cos = cosf(IRIS_ANGLE), pupil_angle = IRIS_ANGLE * e.pupil;
-    const float lx = -0.4f, ly = -0.5f, lz = 0.768f;  // light from upper left
-    const rgb_t sclera = {0.93f, 0.93f, 0.95f}, dark = {0.02f, 0.02f, 0.03f}, white = {1, 1, 1};
-
+    float yaw = e.gaze_x * 0.6f, pitch = e.gaze_y * 0.5f;
+    float sy = sinf(yaw), cy = cosf(yaw), sp = sinf(pitch), cp = cosf(pitch);
     for (int j = 0; j < EYE_SIZE; j++) {
         float v = (j + 0.5f) / (EYE_SIZE / 2) - 1;
         for (int i = 0; i < EYE_SIZE; i++) {
             float u = (i + 0.5f) / (EYE_SIZE / 2) - 1;
-            float r2 = u * u + v * v;
-            if (r2 >= 1) { *fb++ = 0; continue; }
-            float z = sqrtf(1 - r2), r = sqrtf(r2);
-
-            // Eyelids, in screen space. Blink closes both; squint raises an arched lower lid.
-            float top = -1.05f + 1.07f * e.blink + 0.12f * u * u * e.blink;
-            float bottom = 1.05f - 1.03f * e.blink;
-            float happy = 1.05f - e.squint * 0.6f * (1 - 0.5f * u * u);
-            if (happy < bottom) bottom = happy;
-
-            rgb_t col;
-            if (v < top || v > bottom) {
-                col = dark;
-            } else {
-                float c = u * gx + v * gy + z * gz;  // cos(angle from gaze center)
-                col = sclera;
-                if (c > iris_cos - 0.01f) {
-                    float ang = acosf(clampf(c, -1, 1)), d = ang / IRIS_ANGLE;
-                    rgb_t iris;
-                    if (ang < pupil_angle) {
-                        iris = dark;
-                    } else {
-                        float phi = atan2f(u * e2x + v * e2y + z * e2z, u * e1x + z * e1z) + e.phase;
-                        float fiber = 0.8f + 0.2f * sinf(phi * 29 + d * 4) * sinf(phi * 11 - d * 7);
-                        float limbal = 1 - 0.7f * smoothstep(0.82f, 1, d);
-                        iris = scale(e.iris, fiber * (0.7f + 0.5f * d) * limbal);
-                    }
-                    col = mix(sclera, iris, smoothstep(iris_cos - 0.01f, iris_cos + 0.01f, c));
-                }
-                // Sphere shading plus a wet highlight sell the 3D look.
-                float diffuse = fmaxf(0, u * lx + v * ly + z * lz);
-                col = scale(col, (0.35f + 0.65f * diffuse) * (0.55f + 0.45f * z));
-                float spec = 0.8f * expf(-((u + 0.38f) * (u + 0.38f) + (v + 0.42f) * (v + 0.42f)) * 40);
-                col = mix(col, white, spec);
-            }
-
-            // Status ring around the rim, visible even mid-blink.
-            col = mix(col, e.iris, smoothstep(0.86f, 1, r) * clampf(e.glow, 0, 1));
-            *fb++ = rgb565(col);
+            *fb++ = u * u + v * v < 1 ? rgb565(ball(u, v, sy, cy, sp, cp), i, j) : 0;
         }
     }
 }
