@@ -1,7 +1,7 @@
-# Project: Desk Sphere
+# Project: Mini Sphere
 
 ## Overview
-An open-source desk companion modeled on the Las Vegas Sphere: a minimal glowing face that follows your mouse and shows what your coding agents are doing (thinking, done, error). Software first, in a browser simulator; hardware (ESP32-S3 + 240×240 round GC9A01 LCD under a glass dome) later.
+An open-source desk companion modeled on the Las Vegas Sphere (https://github.com/Isha1218/mini-sphere): a minimal glowing face that follows your mouse and shows what your coding agents are doing (thinking, done, error). Software first, in a browser simulator; hardware (ESP32-S3 + 240×240 round GC9A01 LCD under a glass dome) later.
 
 ## Tech Stack
 - **firmware/**: portable C99 renderer and protocol parser. Compiled to wasm (Emscripten) for the sim now, and for the ESP32 later. No platform deps, so it carries over to hardware.
