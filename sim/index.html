@@ -18,6 +18,7 @@
 <canvas id="screen" width="240" height="240"></canvas>
 <div class="buttons" id="looks">
   <button data-look="eye" class="on">1 · Minimal</button>
+  <button data-look="lid">1b · Half-lid</button>
   <button data-look="face">3 · Emoji</button>
 </div>
 <div class="buttons" id="states">
@@ -47,7 +48,7 @@ createSphere().then((M) => {
     const now = Math.floor(performance.now() - t0) + 1;
     M._eye_update(now);
     M._face_update(now);
-    look === 'eye' ? M._eye_render(fb) : M._face_render(fb);
+    look === 'face' ? M._face_render(fb) : M._eye_render(fb);
     const px = M.HEAPU16.subarray(fb / 2, fb / 2 + SIZE * SIZE), out = img.data;
     for (let i = 0; i < px.length; i++) {
       const p = px[i];
@@ -64,6 +65,7 @@ createSphere().then((M) => {
   // Buttons send the same protocol messages the daemon does.
   document.querySelectorAll('#looks button').forEach((b) => b.onclick = () => {
     look = b.dataset.look;
+    M._eye_set_half_lid(look === 'lid' ? 1 : 0);
     document.querySelectorAll('#looks button').forEach((o) => o.classList.toggle('on', o === b));
   });
   document.querySelectorAll('#states button').forEach((b) =>

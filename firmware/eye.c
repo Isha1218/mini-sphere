@@ -8,16 +8,20 @@ typedef struct { float r, g, b; } rgb_t;
 
 #define DONE_SECONDS 4.0f   // "done" celebrates, then returns to idle
 #define MORPH_SECONDS 0.3f  // expression change duration
-#define AA 0.012f           // edge softness, about one pixel in face units
+#define AA 0.012f
+#define EYE_HW (0.035f + 0.035f * e.blink)  // eye half-width: widens as it blinks (squash and stretch)           // edge softness, about one pixel in face units
 
 static struct {
     eye_state_t state, prev;
     uint32_t state_since, now, last, next_blink, blink_start, rng;
+    uint32_t moved_at, next_glance;
     float look_x, look_y;   // target from the cursor
+    float glance_x, glance_y;  // where it looks on its own when the cursor is still
     float gaze_x, gaze_y;   // smoothed: where the face points
     float blink;            // 0 open .. 1 closed
     float bright;           // overall brightness
     float morph;            // 0 = showing prev expression .. 1 = fully current
+    int half_lid;           // experiment: eyes with a lid cut across the top
 } e;
 
 static float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
@@ -36,9 +40,13 @@ void eye_init(uint32_t seed) {
 }
 
 void eye_look(float x, float y) {
-    e.look_x = clampf(x, -1, 1);
-    e.look_y = clampf(y, -1, 1);
+    x = clampf(x, -1, 1), y = clampf(y, -1, 1);
+    if (fabsf(x - e.look_x) + fabsf(y - e.look_y) > 0.01f) e.moved_at = e.now;
+    e.look_x = x;
+    e.look_y = y;
 }
+
+void eye_set_half_lid(int on) { e.half_lid = on; }
 
 void eye_set_state(eye_state_t s) {
     if (s >= EYE_STATE_COUNT || s == e.state) return;
@@ -56,9 +64,9 @@ void eye_update(uint32_t now) {
 
     float tx = e.look_x, ty = e.look_y, bright = 1;
     switch (e.state) {
-    case EYE_THINKING:  // look up and away, drifting
-        tx = 0.55f + 0.15f * sinf(t * 0.7f);
-        ty = -0.55f + 0.1f * sinf(t * 1.1f);
+    case EYE_THINKING:  // look up, slowly scanning side to side
+        tx = 0.45f * sinf(t * 0.8f);
+        ty = -0.55f + 0.05f * sinf(t * 1.3f);
         break;
     case EYE_WAITING:   // turn to face you, pulse to get attention
         tx = ty = 0;
@@ -67,7 +75,17 @@ void eye_update(uint32_t now) {
     case EYE_ERROR:     // shake
         tx = 0.35f * sinf(t * 30) * expf(-age * 2); ty = 0;
         break;
-    default: break;
+    default:            // cursor still for a while: glance around on its own
+        if (now - e.moved_at > 3000) {
+            if (now >= e.next_glance) {
+                e.glance_x = (rnd() % 1000 / 1000.0f - 0.5f) * 1.2f;
+                e.glance_y = (rnd() % 1000 / 1000.0f - 0.5f) * 0.6f;
+                e.next_glance = now + 1200 + rnd() % 2000;
+            }
+            tx = clampf(e.look_x + e.glance_x, -1, 1);
+            ty = clampf(e.look_y + e.glance_y, -1, 1);
+        }
+        break;
     }
 
     float fast = 1 - expf(-dt * 10);
@@ -81,6 +99,10 @@ void eye_update(uint32_t now) {
         e.next_blink = now + 2500 + rnd() % 4000;
     }
     float bt = (now - e.blink_start) / 1000.0f;  // 0.12s closing, 0.12s opening
+    if (e.state == EYE_WAITING) {  // "hey?" double-blink every 2.5s instead of random blinks
+        bt = fmodf(age, 2.5f);
+        if (bt > 0.32f) bt -= 0.32f;
+    }
     e.blink = bt < 0.24f ? 1 - fabsf(bt - 0.12f) / 0.12f : 0;
 }
 
@@ -104,14 +126,35 @@ static float arc(float x, float y, float cx, float cy, float r, float w, float c
 }
 
 static float eyes(float x, float y, float hh) {
-    return minf(pill(x, y, -0.26f, -0.12f, 0.035f, hh, 0.06f), pill(x, y, 0.26f, -0.12f, 0.035f, hh, 0.06f));
+    return minf(pill(x, y, -0.26f, -0.12f, EYE_HW, hh, 0.06f), pill(x, y, 0.26f, -0.12f, EYE_HW, hh, 0.06f));
+}
+
+// Pill eye with a straight top lid cutting across it; the lid's height and slant set the mood.
+static float lid_eye(float x, float y, float cx, float lid_y, float slope) {
+    float d = pill(x, y, cx, -0.06f, EYE_HW + 0.015f, 0.07f * (1 - e.blink), 0.08f);
+    return maxf(d, (lid_y + slope * (x - cx)) - y);
+}
+
+static float lid_features(eye_state_t state, float x, float y) {
+    switch (state) {
+    case EYE_THINKING: return minf(lid_eye(x, y, -0.24f, -0.1f, 0), lid_eye(x, y, 0.24f, -0.02f, 0));      // one lid lower
+    case EYE_WAITING:  return minf(lid_eye(x, y, -0.24f, -0.3f, 0), lid_eye(x, y, 0.24f, -0.3f, 0));       // lids up: wide awake
+    case EYE_DONE:     return minf(arc(x, y, -0.24f, -0.02f, 0.1f, 0.035f, -0.04f, 0), arc(x, y, 0.24f, -0.02f, 0.1f, 0.035f, -0.04f, 0));
+    case EYE_ERROR:    return minf(lid_eye(x, y, -0.24f, -0.08f, 0.5f), lid_eye(x, y, 0.24f, -0.08f, -0.5f));  // upset slant
+    default: {         // content: no lid, bottoms curved up by the "cheeks" (smiling eyes)
+        float d = minf(lid_eye(x, y, -0.24f, -0.5f, 0), lid_eye(x, y, 0.24f, -0.5f, 0));
+        float cheek = minf(len(x + 0.24f, y - 0.29f) - 0.25f, len(x - 0.24f, y - 0.29f) - 0.25f);
+        return maxf(d, -cheek);
+    }
+    }
 }
 
 static float features(eye_state_t state, float x, float y) {
+    if (e.half_lid) return lid_features(state, x, y);
     float open = 0.12f * (1 - e.blink);  // eye half-height above the rounded caps
     switch (state) {
     case EYE_THINKING:  // one eye squints
-        return minf(pill(x, y, -0.26f, -0.12f, 0.035f, open, 0.06f), pill(x, y, 0.26f, -0.1f, 0.035f, open * 0.12f, 0.05f));
+        return minf(pill(x, y, -0.26f, -0.12f, EYE_HW, open, 0.06f), pill(x, y, 0.26f, -0.1f, EYE_HW, open * 0.12f, 0.05f));
     case EYE_WAITING:   // eyes open extra wide
         return eyes(x, y, open * 1.2f);
     case EYE_DONE:      // ^ ^
