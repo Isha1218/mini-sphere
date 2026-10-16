@@ -1,5 +1,5 @@
-// Look 1: minimalist glowing white eyes (no mouth) on a black glass ball.
-// Expressions morph into each other instead of snapping.
+// Minimal glowing white eyes on a black glass ball. Lids and eye shape carry the mood;
+// expressions morph into each other instead of snapping.
 #include "eye.h"
 #include <math.h>
 #include <string.h>
@@ -8,8 +8,8 @@ typedef struct { float r, g, b; } rgb_t;
 
 #define DONE_SECONDS 4.0f   // "done" celebrates, then returns to idle
 #define MORPH_SECONDS 0.3f  // expression change duration
-#define AA 0.012f
-#define EYE_HW (0.035f + 0.035f * e.blink)  // eye half-width: widens as it blinks (squash and stretch)           // edge softness, about one pixel in face units
+#define AA 0.012f           // edge softness, about one pixel in face units
+#define EYE_HW (0.05f + 0.035f * e.blink)  // eye half-width: widens as it blinks (squash and stretch)
 
 static struct {
     eye_state_t state, prev;
@@ -20,7 +20,6 @@ static struct {
     float gaze_x, gaze_y;   // smoothed: where the face points
     float blink;            // 0 open .. 1 closed
     float morph;            // 0 = showing prev expression .. 1 = fully current
-    int half_lid;           // experiment: eyes with a lid cut across the top
 } e;
 
 static float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
@@ -43,8 +42,6 @@ void eye_look(float x, float y) {
     e.look_x = x;
     e.look_y = y;
 }
-
-void eye_set_half_lid(int on) { e.half_lid = on; }
 
 void eye_set_state(eye_state_t s) {
     if (s >= EYE_STATE_COUNT || s == e.state) return;
@@ -108,23 +105,13 @@ static float segment(float x, float y, float ax, float ay, float bx, float by, f
     return len(px - dx * h, py - dy * h) - w;
 }
 
-// Stroke along a circle, kept on one side of the line y = cut (below if below > 0).
-static float arc(float x, float y, float cx, float cy, float r, float w, float cut, int below) {
-    float d = fabsf(len(x - cx, y - cy) - r) - w;
-    return maxf(d, below ? cut - y : y - cut);
-}
-
-static float eyes(float x, float y, float hh) {
-    return minf(pill(x, y, -0.26f, -0.12f, EYE_HW, hh, 0.06f), pill(x, y, 0.26f, -0.12f, EYE_HW, hh, 0.06f));
-}
-
 // Pill eye with a straight top lid cutting across it; the lid's height and slant set the mood.
 static float lid_eye(float x, float y, float cx, float lid_y, float slope) {
-    float d = pill(x, y, cx, -0.06f, EYE_HW + 0.015f, 0.07f * (1 - e.blink), 0.08f);
+    float d = pill(x, y, cx, -0.06f, EYE_HW, 0.07f * (1 - e.blink), 0.08f);
     return maxf(d, (lid_y + slope * (x - cx)) - y);
 }
 
-static float lid_features(eye_state_t state, float x, float y) {
+static float features(eye_state_t state, float x, float y) {
     switch (state) {
     case EYE_THINKING: return minf(lid_eye(x, y, -0.24f, -0.1f, 0), lid_eye(x, y, 0.24f, -0.02f, 0));      // one lid lower
     case EYE_DONE: {   // squeezed-shut happy chevrons
@@ -141,28 +128,6 @@ static float lid_features(eye_state_t state, float x, float y) {
         float cheek = minf(len(x + 0.24f, y - 0.29f) - 0.25f, len(x - 0.24f, y - 0.29f) - 0.25f);
         return maxf(d, -cheek);
     }
-    }
-}
-
-static float features(eye_state_t state, float x, float y) {
-    if (e.half_lid) return lid_features(state, x, y);
-    float open = 0.12f * (1 - e.blink);  // eye half-height above the rounded caps
-    switch (state) {
-    case EYE_THINKING:  // one eye squints
-        return minf(pill(x, y, -0.26f, -0.12f, EYE_HW, open, 0.06f), pill(x, y, 0.26f, -0.1f, EYE_HW, open * 0.12f, 0.05f));
-    case EYE_DONE:      // ^ ^
-        return minf(arc(x, y, -0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0), arc(x, y, 0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0));
-    case EYE_ERROR: {   // x x
-        float d = 1;
-        for (int s = -1; s <= 1; s += 2) {
-            float cx = 0.26f * s;
-            d = minf(d, segment(x, y, cx - 0.08f, -0.2f, cx + 0.08f, -0.04f, 0.03f));
-            d = minf(d, segment(x, y, cx - 0.08f, -0.04f, cx + 0.08f, -0.2f, 0.03f));
-        }
-        return d;
-    }
-    default:            // idle: tall pill eyes
-        return eyes(x, y, open);
     }
 }
 

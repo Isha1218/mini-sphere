@@ -11,17 +11,11 @@
   button { background: #1b1b22; color: #ccc; border: 1px solid #2a2a33; border-radius: 6px;
            padding: 6px 12px; font: inherit; cursor: pointer; }
   button:hover { background: #24242d; }
-  button.on { border-color: #888; color: #fff; }
 </style>
 </head>
 <body>
 <canvas id="screen" width="240" height="240"></canvas>
-<div class="buttons" id="looks">
-  <button data-look="eye" class="on">1 · Minimal</button>
-  <button data-look="lid">1b · Half-lid</button>
-  <button data-look="face">3 · Emoji</button>
-</div>
-<div class="buttons" id="states">
+<div class="buttons">
   <button data-state="idle">idle</button>
   <button data-state="thinking">thinking</button>
   <button data-state="done">done</button>
@@ -36,18 +30,14 @@ createSphere().then((M) => {
   const fb = M._malloc(SIZE * SIZE * 2);
   const send = (line) => M.ccall('protocol_handle_line', null, ['string'], [line]);
   M._eye_init(Date.now() >>> 0);
-  M._face_init(Date.now() >>> 0);
-  let look = 'eye';  // which look to show while we compare them
 
   // Draw: run the firmware renderer, then expand RGB565 to RGBA for the canvas.
   const ctx = document.getElementById('screen').getContext('2d');
   const img = ctx.createImageData(SIZE, SIZE);
   const t0 = performance.now();
   function frame() {
-    const now = Math.floor(performance.now() - t0) + 1;
-    M._eye_update(now);
-    M._face_update(now);
-    look === 'face' ? M._face_render(fb) : M._eye_render(fb);
+    M._eye_update(Math.floor(performance.now() - t0) + 1);
+    M._eye_render(fb);
     const px = M.HEAPU16.subarray(fb / 2, fb / 2 + SIZE * SIZE), out = img.data;
     for (let i = 0; i < px.length; i++) {
       const p = px[i];
@@ -62,12 +52,7 @@ createSphere().then((M) => {
   frame();
 
   // Buttons send the same protocol messages the daemon does.
-  document.querySelectorAll('#looks button').forEach((b) => b.onclick = () => {
-    look = b.dataset.look;
-    M._eye_set_half_lid(look === 'lid' ? 1 : 0);
-    document.querySelectorAll('#looks button').forEach((o) => o.classList.toggle('on', o === b));
-  });
-  document.querySelectorAll('#states button').forEach((b) =>
+  document.querySelectorAll('button').forEach((b) =>
     b.onclick = () => send(JSON.stringify({ t: 'state', v: b.dataset.state })));
 
   // Daemon link: same messages that will later go over USB serial.

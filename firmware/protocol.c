@@ -1,10 +1,9 @@
 #include "protocol.h"
 #include "eye.h"
-#include "face.h"
 #include <stdlib.h>
 #include <string.h>
 
-static const char *STATE_NAMES[FACE_STATE_COUNT] = {"idle", "thinking", "done", "error"};
+static const char *STATE_NAMES[EYE_STATE_COUNT] = {"idle", "thinking", "done", "error"};
 
 // Minimal parser for our flat messages: returns a pointer to the value after "key":
 static const char *value_of(const char *line, const char *key) {
@@ -28,16 +27,10 @@ void protocol_handle_line(const char *line) {
     const char *t = value_of(line, "t");
     if (is_string(t, "look")) {
         const char *x = value_of(line, "x"), *y = value_of(line, "y");
-        if (x && y) {
-            eye_look(strtof(x, NULL), strtof(y, NULL));
-            face_look(strtof(x, NULL), strtof(y, NULL));
-        }
+        if (x && y) eye_look(strtof(x, NULL), strtof(y, NULL));
     } else if (is_string(t, "state")) {
         const char *v = value_of(line, "v");
-        for (int i = 0; i < FACE_STATE_COUNT; i++)
-            if (is_string(v, STATE_NAMES[i])) {
-                eye_set_state((eye_state_t)i);
-                face_set_state((face_state_t)i);
-            }
+        for (int i = 0; i < EYE_STATE_COUNT; i++)
+            if (is_string(v, STATE_NAMES[i])) eye_set_state((eye_state_t)i);
     }
 }

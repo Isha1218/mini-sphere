@@ -15,10 +15,10 @@ cursor (30 Hz) ─────────────────────�
 ```
 - Protocol: one JSON object per line. `{"t":"look","x":-1..1,"y":-1..1}`, `{"t":"state","v":"idle|thinking|done|error"}`.
 - The sphere does all drawing; the computer only sends messages. Frames are never streamed.
-- Hardware port = new display/serial glue around the same `face.c` + `protocol.c`, plus a serial transport in the daemon.
+- Hardware port = new display/serial glue around the same `eye.c` + `protocol.c`, plus a serial transport in the daemon.
 
 ## Key Files
-- `firmware/face.c`: Sphere-style emoji face (turns toward cursor, expression per state) drawn as 48×48 LED dots
+- `firmware/eye.c`: the face. Glowing white eyes on a black glass ball that turn toward the cursor; idle = smiling eyes, thinking = uneven lids scanning, done = squeezed-shut ^ ^, error = slanted lids + shake. Expressions morph; blinks squash; glances around when the cursor is still
 - `firmware/protocol.c`: line parser → `face_look` / `face_set_state`
 - `sim/index.html`, `sim/build.sh`: browser simulator and wasm build
 - `daemon/sphere/hub.py`: WebSocket relay, cursor tracking, serves the sim on :8000
