@@ -4,7 +4,7 @@
 
 #define FACE_SIZE 240  // 240x240 round LCD (GC9A01)
 
-typedef enum { FACE_IDLE, FACE_THINKING, FACE_WAITING, FACE_DONE, FACE_ERROR, FACE_STATE_COUNT } face_state_t;
+typedef enum { FACE_IDLE, FACE_THINKING, FACE_DONE, FACE_ERROR, FACE_STATE_COUNT } face_state_t;
 
 void face_init(uint32_t seed);
 void face_look(float x, float y);  // -1..1, where the cursor is relative to screen center

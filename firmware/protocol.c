@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char *STATE_NAMES[FACE_STATE_COUNT] = {"idle", "thinking", "waiting", "done", "error"};
+static const char *STATE_NAMES[FACE_STATE_COUNT] = {"idle", "thinking", "done", "error"};
 
 // Minimal parser for our flat messages: returns a pointer to the value after "key":
 static const char *value_of(const char *line, const char *key) {

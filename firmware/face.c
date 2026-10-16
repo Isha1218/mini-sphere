@@ -54,10 +54,6 @@ void face_update(uint32_t now) {
         tx = 0.55f + 0.15f * sinf(t * 0.7f);
         ty = -0.55f + 0.1f * sinf(t * 1.1f);
         break;
-    case FACE_WAITING:   // turn to face you, pulse to get attention
-        tx = ty = 0;
-        bright = 0.7f + 0.3f * sinf(t * 4);
-        break;
     case FACE_ERROR:     // shake, go red
         tx = 0.35f * sinf(t * 30) * expf(-age * 2); ty = 0;
         tint = 1;
@@ -116,12 +112,6 @@ static void features(float x, float y, float *ink, float *tongue) {
         d = minf(d, segment(x, y, -0.42f, -0.44f, -0.18f, -0.44f, 0.035f));  // flat brow
         d = minf(d, segment(x, y, 0.16f, -0.5f, 0.42f, -0.58f, 0.035f));     // raised brow
         d = minf(d, segment(x, y, -0.1f, 0.36f, 0.2f, 0.32f, 0.04f));        // hmm mouth
-        break;
-    case FACE_WAITING:
-        d = minf(ellipse(x, y, -0.3f, -0.16f, 0.12f, eye_ry * 1.2f), ellipse(x, y, 0.3f, -0.16f, 0.12f, eye_ry * 1.2f));
-        d = minf(d, arc(x, y, -0.3f, -0.3f, 0.16f, 0.035f, -0.4f, 0));       // raised brows
-        d = minf(d, arc(x, y, 0.3f, -0.3f, 0.16f, 0.035f, -0.4f, 0));
-        d = minf(d, ellipse(x, y, 0, 0.36f, 0.08f, 0.1f));                    // "o" mouth
         break;
     case FACE_DONE: {
         d = minf(arc(x, y, -0.3f, -0.1f, 0.12f, 0.045f, -0.12f, 0), arc(x, y, 0.3f, -0.1f, 0.12f, 0.045f, -0.12f, 0));

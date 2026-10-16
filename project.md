@@ -1,7 +1,7 @@
 # Project: Desk Sphere
 
 ## Overview
-An open-source desk companion modeled on the Las Vegas Sphere: a glowing LED emoji face that follows your mouse and shows what your coding agents are doing (thinking, waiting on you, done, error). Software first, in a browser simulator; hardware (ESP32-S3 + 240×240 round GC9A01 LCD under a glass dome) later.
+An open-source desk companion modeled on the Las Vegas Sphere: a minimal glowing face that follows your mouse and shows what your coding agents are doing (thinking, done, error). Software first, in a browser simulator; hardware (ESP32-S3 + 240×240 round GC9A01 LCD under a glass dome) later.
 
 ## Tech Stack
 - **firmware/**: portable C99 renderer and protocol parser. Compiled to wasm (Emscripten) for the sim now, and for the ESP32 later. No platform deps, so it carries over to hardware.
@@ -13,7 +13,7 @@ An open-source desk companion modeled on the Las Vegas Sphere: a glowing LED emo
 Claude Code hooks ─► sphere send <state> ─┐
 cursor (30 Hz) ───────────────────────────┼─► daemon hub (ws://localhost:8765) ─► sim (wasm)   [later: USB serial ─► ESP32]
 ```
-- Protocol: one JSON object per line. `{"t":"look","x":-1..1,"y":-1..1}`, `{"t":"state","v":"idle|thinking|waiting|done|error"}`.
+- Protocol: one JSON object per line. `{"t":"look","x":-1..1,"y":-1..1}`, `{"t":"state","v":"idle|thinking|done|error"}`.
 - The sphere does all drawing; the computer only sends messages. Frames are never streamed.
 - Hardware port = new display/serial glue around the same `face.c` + `protocol.c`, plus a serial transport in the daemon.
 
@@ -30,7 +30,7 @@ brew install emscripten
 python3 -m venv .venv && .venv/bin/pip install -e .
 sim/build.sh                 # rebuild after editing firmware/
 .venv/bin/sphere run         # then open http://localhost:8000
-.venv/bin/sphere send done   # idle | thinking | waiting | done | error
+.venv/bin/sphere send done   # idle | thinking | done | error
 ```
 
 ## Status

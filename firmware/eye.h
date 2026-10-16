@@ -4,7 +4,7 @@
 
 #define EYE_SIZE 240  // 240x240 round LCD (GC9A01)
 
-typedef enum { EYE_IDLE, EYE_THINKING, EYE_WAITING, EYE_DONE, EYE_ERROR, EYE_STATE_COUNT } eye_state_t;
+typedef enum { EYE_IDLE, EYE_THINKING, EYE_DONE, EYE_ERROR, EYE_STATE_COUNT } eye_state_t;
 
 void eye_init(uint32_t seed);
 void eye_look(float x, float y);  // -1..1, where the cursor is relative to screen center

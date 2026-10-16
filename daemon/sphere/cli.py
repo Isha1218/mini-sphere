@@ -8,7 +8,7 @@ from websockets.sync.client import connect
 
 from . import hub
 
-STATES = ["idle", "thinking", "waiting", "done", "error"]
+STATES = ["idle", "thinking", "done", "error"]
 
 
 def send(state):

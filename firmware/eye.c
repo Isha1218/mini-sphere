@@ -19,7 +19,6 @@ static struct {
     float glance_x, glance_y;  // where it looks on its own when the cursor is still
     float gaze_x, gaze_y;   // smoothed: where the face points
     float blink;            // 0 open .. 1 closed
-    float bright;           // overall brightness
     float morph;            // 0 = showing prev expression .. 1 = fully current
     int half_lid;           // experiment: eyes with a lid cut across the top
 } e;
@@ -35,7 +34,6 @@ static float len(float x, float y) { return sqrtf(x * x + y * y); }
 void eye_init(uint32_t seed) {
     memset(&e, 0, sizeof e);
     e.rng = seed | 1;
-    e.bright = 1;
     e.morph = 1;
 }
 
@@ -62,15 +60,11 @@ void eye_update(uint32_t now) {
     float age = (now - e.state_since) / 1000.0f;
     if (e.state == EYE_DONE && age > DONE_SECONDS) eye_set_state(EYE_IDLE);
 
-    float tx = e.look_x, ty = e.look_y, bright = 1;
+    float tx = e.look_x, ty = e.look_y;
     switch (e.state) {
     case EYE_THINKING:  // look up, slowly scanning side to side
         tx = 0.45f * sinf(t * 0.8f);
         ty = -0.55f + 0.05f * sinf(t * 1.3f);
-        break;
-    case EYE_WAITING:   // turn to face you, pulse to get attention
-        tx = ty = 0;
-        bright = 0.7f + 0.3f * sinf(t * 4);
         break;
     case EYE_ERROR:     // shake
         tx = 0.35f * sinf(t * 30) * expf(-age * 2); ty = 0;
@@ -91,7 +85,6 @@ void eye_update(uint32_t now) {
     float fast = 1 - expf(-dt * 10);
     e.gaze_x = approach(e.gaze_x, tx, fast);
     e.gaze_y = approach(e.gaze_y, ty, fast);
-    e.bright = approach(e.bright, bright, fast);
     e.morph = smoothstep(0, MORPH_SECONDS, age);
 
     if (now >= e.next_blink) {
@@ -99,10 +92,6 @@ void eye_update(uint32_t now) {
         e.next_blink = now + 2500 + rnd() % 4000;
     }
     float bt = (now - e.blink_start) / 1000.0f;  // 0.12s closing, 0.12s opening
-    if (e.state == EYE_WAITING) {  // "hey?" double-blink every 2.5s instead of random blinks
-        bt = fmodf(age, 2.5f);
-        if (bt > 0.32f) bt -= 0.32f;
-    }
     e.blink = bt < 0.24f ? 1 - fabsf(bt - 0.12f) / 0.12f : 0;
 }
 
@@ -138,8 +127,14 @@ static float lid_eye(float x, float y, float cx, float lid_y, float slope) {
 static float lid_features(eye_state_t state, float x, float y) {
     switch (state) {
     case EYE_THINKING: return minf(lid_eye(x, y, -0.24f, -0.1f, 0), lid_eye(x, y, 0.24f, -0.02f, 0));      // one lid lower
-    case EYE_WAITING:  return minf(lid_eye(x, y, -0.24f, -0.3f, 0), lid_eye(x, y, 0.24f, -0.3f, 0));       // lids up: wide awake
-    case EYE_DONE:     return minf(arc(x, y, -0.24f, -0.02f, 0.1f, 0.035f, -0.04f, 0), arc(x, y, 0.24f, -0.02f, 0.1f, 0.035f, -0.04f, 0));
+    case EYE_DONE: {   // squeezed-shut happy chevrons
+        float d = 1;
+        for (int k = -1; k <= 1; k += 2) {
+            float cx = 0.24f * k;
+            d = minf(d, minf(segment(x, y, cx - 0.09f, 0.0f, cx, -0.09f, 0.045f), segment(x, y, cx, -0.09f, cx + 0.09f, 0.0f, 0.045f)));
+        }
+        return d;
+    }
     case EYE_ERROR:    return minf(lid_eye(x, y, -0.24f, -0.08f, 0.5f), lid_eye(x, y, 0.24f, -0.08f, -0.5f));  // upset slant
     default: {         // content: no lid, bottoms curved up by the "cheeks" (smiling eyes)
         float d = minf(lid_eye(x, y, -0.24f, -0.5f, 0), lid_eye(x, y, 0.24f, -0.5f, 0));
@@ -155,8 +150,6 @@ static float features(eye_state_t state, float x, float y) {
     switch (state) {
     case EYE_THINKING:  // one eye squints
         return minf(pill(x, y, -0.26f, -0.12f, EYE_HW, open, 0.06f), pill(x, y, 0.26f, -0.1f, EYE_HW, open * 0.12f, 0.05f));
-    case EYE_WAITING:   // eyes open extra wide
-        return eyes(x, y, open * 1.2f);
     case EYE_DONE:      // ^ ^
         return minf(arc(x, y, -0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0), arc(x, y, 0.26f, -0.06f, 0.1f, 0.035f, -0.08f, 0));
     case EYE_ERROR: {   // x x
@@ -190,7 +183,7 @@ static rgb_t ball(float u, float v, float sy, float cy, float sp, float cp) {
         float d = features(e.state, x1, y2);
         if (e.morph < 1) d = features(e.prev, x1, y2) + (d - features(e.prev, x1, y2)) * e.morph;
         float lit = smoothstep(AA, -AA, d) + 0.18f * expf(-maxf(d, 0) * 18);  // crisp core + soft bloom
-        lit *= (0.5f + 0.5f * z2) * e.bright;  // dimmer as features turn away
+        lit *= 0.5f + 0.5f * z2;  // dimmer as features turn away
         const rgb_t white = {0.96f, 0.97f, 1.0f};
         col.r += white.r * lit; col.g += white.g * lit; col.b += white.b * lit;
     }
