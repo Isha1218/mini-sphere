@@ -10,7 +10,7 @@ An open-source desk companion modeled on the Las Vegas Sphere (https://github.co
 
 ## Architecture
 ```
-Claude Code hooks ─► sphere send <state> ─┐
+Claude Code hooks ─► minisphere send <state> ─┐
 cursor (30 Hz) ───────────────────────────┼─► daemon hub (ws://localhost:8765) ─► sim (wasm)   [later: USB serial ─► ESP32]
 ```
 - Protocol: one JSON object per line. `{"t":"look","x":-1..1,"y":-1..1}`, `{"t":"state","v":"idle|thinking|done|error"}`.
@@ -22,17 +22,17 @@ cursor (30 Hz) ─────────────────────�
 - `firmware/protocol.c`: line parser → `face_look` / `face_set_state`
 - `sim/index.html`, `sim/build.sh`: browser simulator and wasm build
 - `daemon/sphere/hub.py`: WebSocket relay, cursor tracking, serves the sim on :8000
-- `daemon/sphere/cli.py`: `sphere run`, `sphere send <state>`
+- `daemon/sphere/cli.py`: `minisphere run`, `minisphere send <state>`
 
 ## How to Run
 ```sh
 brew install emscripten
 python3 -m venv .venv && .venv/bin/pip install -e .
 sim/build.sh                 # rebuild after editing firmware/
-.venv/bin/sphere run         # then open http://localhost:8000
-.venv/bin/sphere send done   # idle | thinking | done | error
+.venv/bin/minisphere run         # then open http://localhost:8000
+.venv/bin/minisphere send done   # idle | thinking | done | error
 ```
 
 ## Status
-- Stage 1 (done): sim + daemon + mouse tracking + `sphere send`.
+- Stage 1 (done): sim + daemon + mouse tracking + `minisphere send`.
 - Next: wire Claude Code hooks; Stage 2: three.js 3D preview (dome, tilt, viewing angle).

@@ -1,6 +1,6 @@
 """The daemon: relays protocol messages to every connected sphere and streams the cursor.
 
-Spheres (the browser sim today, USB serial later) and senders (`sphere send`) all connect
+Spheres (the browser sim today, USB serial later) and senders (`minisphere send`) all connect
 to one WebSocket. Any message from one client goes to all the others.
 """
 import asyncio
@@ -58,6 +58,6 @@ def serve_sim():
 
 async def run():
     serve_sim()
-    print(f"sphere daemon running. Simulator: http://localhost:{HTTP_PORT}", flush=True)
+    print(f"minisphere daemon running. Simulator: http://localhost:{HTTP_PORT}", flush=True)
     async with serve(handle, "localhost", WS_PORT):
         await track_mouse()

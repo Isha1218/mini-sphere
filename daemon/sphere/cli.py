@@ -1,4 +1,4 @@
-"""`sphere run` starts the daemon. `sphere send <state>` sets the sphere's state."""
+"""`minisphere run` starts the daemon. `minisphere send <state>` sets the sphere's state."""
 import argparse
 import asyncio
 import json
@@ -17,11 +17,11 @@ def send(state):
             ws.send(json.dumps({"t": "state", "v": state}))
     except OSError:
         # Never fail the caller (e.g. a Claude Code hook) just because the daemon is off.
-        print("sphere: daemon not running", file=sys.stderr)
+        print("minisphere: daemon not running", file=sys.stderr)
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="sphere")
+    parser = argparse.ArgumentParser(prog="minisphere")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("run", help="start the daemon")
     send_p = sub.add_parser("send", help="set the sphere's state")
