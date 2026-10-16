@@ -19,7 +19,7 @@ cursor (30 Hz) ─────────────────────�
 
 ## Key Files
 - `firmware/eye.c`: the face. Glowing white eyes on a black glass ball that turn toward the cursor; idle = smiling eyes, thinking = uneven lids scanning, done = squeezed-shut ^ ^, error = slanted lids + shake. Expressions morph; blinks squash; glances around when the cursor is still
-- `firmware/protocol.c`: line parser → `face_look` / `face_set_state`
+- `firmware/protocol.c`: line parser → `eye_look` / `eye_set_state`
 - `sim/index.html`, `sim/build.sh`: browser simulator and wasm build
 - `daemon/sphere/hub.py`: WebSocket relay, cursor tracking, serves the sim on :8000
 - `daemon/sphere/cli.py`: `minisphere run`, `minisphere send <state>`
